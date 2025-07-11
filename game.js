@@ -16,11 +16,12 @@ class BallsInBoxesGame {
         this.ctx = this.canvas.getContext('2d');
         this.score = 0;
         this.turn = 1;
+        this.level = 1;
         this.gameWon = false;
         
-        this.colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A'];
         this.balls = [];
         this.boxes = [];
+        this.levelColors = [];
         this.walls = [];
         
         this.gravityAngle = Math.PI / 2; // Start pointing down
@@ -213,6 +214,80 @@ class BallsInBoxesGame {
         };
     }
     
+    // Convert HSL to hex color
+    hslToHex(h, s, l) {
+        l /= 100;
+        const a = s * Math.min(l, 1 - l) / 100;
+        const f = n => {
+            const k = (n + h / 30) % 12;
+            const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+            return Math.round(255 * color).toString(16).padStart(2, '0');
+        };
+        return `#${f(0)}${f(8)}${f(4)}`;
+    }
+    
+    // Calculate color distance in RGB space
+    getColorDistance(color1, color2) {
+        const rgb1 = this.hexToRgb(color1);
+        const rgb2 = this.hexToRgb(color2);
+        
+        const rDiff = rgb1.r - rgb2.r;
+        const gDiff = rgb1.g - rgb2.g;
+        const bDiff = rgb1.b - rgb2.b;
+        
+        return Math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff);
+    }
+    
+    // Convert hex to RGB
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : null;
+    }
+    
+    // Generate N distinct random colors
+    generateDistinctColors(count) {
+        const colors = [];
+        const minDistance = 120; // Minimum color distance for distinction
+        const maxAttempts = 1000; // Prevent infinite loops
+        
+        for (let i = 0; i < count; i++) {
+            let attempts = 0;
+            let newColor;
+            let isDistinct = false;
+            
+            while (!isDistinct && attempts < maxAttempts) {
+                // Generate random HSL color with good saturation and lightness
+                const hue = Math.random() * 360;
+                const saturation = 70 + Math.random() * 30; // 70-100% saturation
+                const lightness = 45 + Math.random() * 25; // 45-70% lightness
+                
+                newColor = this.hslToHex(hue, saturation, lightness);
+                
+                // Check if this color is distinct from all existing colors
+                isDistinct = colors.every(existingColor => 
+                    this.getColorDistance(newColor, existingColor) >= minDistance
+                );
+                
+                attempts++;
+            }
+            
+            // If we couldn't find a distinct color, use a fallback
+            if (!isDistinct) {
+                // Use evenly spaced hues as fallback
+                const hue = (i * 360 / count) % 360;
+                newColor = this.hslToHex(hue, 80, 55);
+            }
+            
+            colors.push(newColor);
+        }
+        
+        return colors;
+    }
+    
     newTurn() {
         console.log('Starting new turn...');
         this.clearGame();
@@ -220,13 +295,13 @@ class BallsInBoxesGame {
         const winScreen = document.getElementById('winScreen');
         if (winScreen) winScreen.style.display = 'none';
         
-        const shuffledColors = [...this.colors].sort(() => Math.random() - 0.5);
-        console.log('Colors:', shuffledColors);
+        this.levelColors = this.generateDistinctColors(this.level);
+        console.log('Generated colors for level', this.level, ':', this.levelColors);
         
         this.boxes = [];
         this.balls = [];
         
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < this.level; i++) {
             let boxPos, ballPos;
             let attempts = 0;
             
@@ -235,9 +310,9 @@ class BallsInBoxesGame {
                 attempts++;
             } while (this.isPositionOccupied(boxPos, 100) && attempts < 50);
             
-            const box = this.createSquareBox(boxPos.x, boxPos.y, shuffledColors[i]);
+            const box = this.createSquareBox(boxPos.x, boxPos.y, this.levelColors[i]);
             this.boxes.push(box);
-            console.log('Created box at:', boxPos.x, boxPos.y, 'color:', shuffledColors[i]);
+            console.log('Created box at:', boxPos.x, boxPos.y, 'color:', this.levelColors[i]);
             
             attempts = 0;
             do {
@@ -245,9 +320,9 @@ class BallsInBoxesGame {
                 attempts++;
             } while (this.isPositionOccupied(ballPos, 60) && attempts < 50);
             
-            const ball = this.createBall(ballPos.x, ballPos.y, shuffledColors[i]);
+            const ball = this.createBall(ballPos.x, ballPos.y, this.levelColors[i]);
             this.balls.push(ball);
-            console.log('Created ball at:', ballPos.x, ballPos.y, 'color:', shuffledColors[i]);
+            console.log('Created ball at:', ballPos.x, ballPos.y, 'color:', this.levelColors[i]);
         }
         
         console.log('Total boxes:', this.boxes.length, 'Total balls:', this.balls.length);
@@ -501,7 +576,7 @@ class BallsInBoxesGame {
             }
         });
         
-        if (correctBalls === 4) {
+        if (correctBalls === this.level) {
             this.gameWon = true;
             this.score += 100;
             this.updateUI();
@@ -513,6 +588,7 @@ class BallsInBoxesGame {
     
     updateUI() {
         document.getElementById('score').textContent = `Score: ${this.score}`;
+        document.getElementById('level').textContent = `Level: ${this.level}`;
         document.getElementById('turn').textContent = `Turn: ${this.turn}`;
     }
     
@@ -719,6 +795,7 @@ class BallsInBoxesGame {
     
     nextTurn() {
         this.turn++;
+        this.level++;
         this.newTurn();
     }
 }
