@@ -65,7 +65,7 @@ class BallsInBoxesGame {
     }
     
     createWalls() {
-        const thickness = 20;
+        const thickness = 100;
         
         this.walls = [
             Bodies.rectangle(this.width / 2, -thickness / 2, this.width, thickness, {
@@ -153,71 +153,35 @@ class BallsInBoxesGame {
     closeBox(box) {
         if (box.isClosed) return;
         
-        // Create wall to close the open side
-        const thickness = 6;
-        let closingWall;
-        
-        switch (box.openSide) {
-            case 0: // Top was open
-                closingWall = Bodies.rectangle(box.x, box.y - box.height / 2 + thickness / 2, box.width, thickness, {
-                    isStatic: true,
-                    render: { fillStyle: '#666' }
-                });
-                break;
-            case 1: // Right was open
-                closingWall = Bodies.rectangle(box.x + box.width / 2 - thickness / 2, box.y, thickness, box.height, {
-                    isStatic: true,
-                    render: { fillStyle: '#666' }
-                });
-                break;
-            case 2: // Bottom was open
-                closingWall = Bodies.rectangle(box.x, box.y + box.height / 2 - thickness / 2, box.width, thickness, {
-                    isStatic: true,
-                    render: { fillStyle: '#666' }
-                });
-                break;
-            case 3: // Left was open
-                closingWall = Bodies.rectangle(box.x - box.width / 2 + thickness / 2, box.y, thickness, box.height, {
-                    isStatic: true,
-                    render: { fillStyle: '#666' }
-                });
-                break;
-        }
-        
-        box.closingWall = closingWall;
-        box.bodies.push(closingWall);
-        box.isClosed = true;
-        
-        World.add(this.world, closingWall);
-        
-        // Remove individual wall bodies from the world
+        // Remove all wall bodies from the world
         World.remove(this.world, box.bodies);
         
-        // Create a single compound body from all the walls
-        const compoundBody = Body.create({
-            parts: box.bodies,
+        // Create a simple solid square body with the ball's color
+        const solidSquare = Bodies.rectangle(box.x, box.y, box.width, box.height, {
             isStatic: false,
             restitution: 0.4,
             friction: 0.5,
             frictionAir: 0.005,
-            frictionStatic: 0.8
+            frictionStatic: 0.8,
+            render: { fillStyle: box.ballColor }
         });
         
         // Add some random initial angular velocity for rotation
         const randomAngularVelocity = (Math.random() - 0.5) * 0.3;
-        Body.setAngularVelocity(compoundBody, randomAngularVelocity);
+        Body.setAngularVelocity(solidSquare, randomAngularVelocity);
         
         // Add a small random initial velocity to encourage tumbling
         const randomVelocityX = (Math.random() - 0.5) * 2;
         const randomVelocityY = Math.random() * -1; // Slight upward velocity
-        Body.setVelocity(compoundBody, { x: randomVelocityX, y: randomVelocityY });
+        Body.setVelocity(solidSquare, { x: randomVelocityX, y: randomVelocityY });
         
-        // Store the compound body
-        box.compoundBody = compoundBody;
+        // Store the solid square body and mark as closed
+        box.solidSquare = solidSquare;
+        box.isClosed = true;
         box.isDynamic = true;
         
-        // Add the compound body to the world
-        World.add(this.world, compoundBody);
+        // Add the solid square to the world
+        World.add(this.world, solidSquare);
     }
     
     createBall(x, y, color, radius = 15) {
@@ -339,6 +303,9 @@ class BallsInBoxesGame {
             if (box.isDynamic && box.compoundBody) {
                 // Remove compound body for dynamic boxes
                 World.remove(this.world, box.compoundBody);
+            } else if (box.isDynamic && box.solidSquare) { 
+                World.remove(this.world, box.solidSquare);
+
             } else {
                 // Remove individual bodies for static boxes
                 World.remove(this.world, box.bodies);
@@ -661,13 +628,13 @@ class BallsInBoxesGame {
         // Draw boxes
         this.boxes.forEach(box => {
             if (box.containsBall) {
-                // Draw filled colored square for boxes with balls
+                // Draw the solid square for closed boxes
                 this.ctx.fillStyle = box.ballColor;
                 
-                if (box.isDynamic && box.compoundBody) {
-                    // For dynamic boxes, draw rotated filled square
-                    const bodyPos = box.compoundBody.position;
-                    const bodyAngle = box.compoundBody.angle;
+                if (box.solidSquare) {
+                    // For dynamic solid squares, draw rotated filled square
+                    const bodyPos = box.solidSquare.position;
+                    const bodyAngle = box.solidSquare.angle;
                     
                     this.ctx.save();
                     this.ctx.translate(bodyPos.x, bodyPos.y);
@@ -678,7 +645,7 @@ class BallsInBoxesGame {
                     
                     this.ctx.restore();
                 } else {
-                    // For static boxes, draw filled square at original position
+                    // Fallback for static boxes (shouldn't happen)
                     this.ctx.fillRect(
                         box.x - box.width / 2, 
                         box.y - box.height / 2, 
@@ -690,34 +657,15 @@ class BallsInBoxesGame {
                 // Draw gray box walls with colored corners for empty boxes
                 this.ctx.fillStyle = '#666';
                 
-                if (box.isDynamic && box.compoundBody) {
-                    // For dynamic boxes (shouldn't happen for empty boxes, but just in case)
-                    const bodyPos = box.compoundBody.position;
-                    const bodyAngle = box.compoundBody.angle;
+                // Draw individual wall bodies for static boxes
+                box.bodies.forEach(body => {
+                    const x = body.position.x - (body.bounds.max.x - body.bounds.min.x) / 2;
+                    const y = body.position.y - (body.bounds.max.y - body.bounds.min.y) / 2;
+                    const width = body.bounds.max.x - body.bounds.min.x;
+                    const height = body.bounds.max.y - body.bounds.min.y;
                     
-                    this.ctx.save();
-                    this.ctx.translate(bodyPos.x, bodyPos.y);
-                    this.ctx.rotate(bodyAngle);
-                    
-                    // Draw walls
-                    const thickness = 6;
-                    this.ctx.fillRect(-box.width / 2, box.height / 2 - thickness, box.width, thickness);
-                    this.ctx.fillRect(-box.width / 2, -box.height / 2, box.width, thickness);
-                    this.ctx.fillRect(-box.width / 2, -box.height / 2, thickness, box.height);
-                    this.ctx.fillRect(box.width / 2 - thickness, -box.height / 2, thickness, box.height);
-                    
-                    this.ctx.restore();
-                } else {
-                    // For static boxes, draw individual wall bodies
-                    box.bodies.forEach(body => {
-                        const x = body.position.x - (body.bounds.max.x - body.bounds.min.x) / 2;
-                        const y = body.position.y - (body.bounds.max.y - body.bounds.min.y) / 2;
-                        const width = body.bounds.max.x - body.bounds.min.x;
-                        const height = body.bounds.max.y - body.bounds.min.y;
-                        
-                        this.ctx.fillRect(x, y, width, height);
-                    });
-                }
+                    this.ctx.fillRect(x, y, width, height);
+                });
                 
                 // Draw colored corner indicators for empty boxes
                 const cornerSize = 12;
