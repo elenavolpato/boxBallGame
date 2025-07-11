@@ -350,9 +350,9 @@ class BallsInBoxesGame {
         const gradient = this.ctx.createLinearGradient(startX, startY, endX, endY);
         
         // Darker but still light colors for the gradient
-        gradient.addColorStop(0, '#d0e0f0'); // Darker light blue
-        gradient.addColorStop(0.5, '#c5d9ec'); // Medium light blue
-        gradient.addColorStop(1, '#b8d0e8'); // Slightly darker blue
+        gradient.addColorStop(0, '#df110044'); // Darker light blue
+        gradient.addColorStop(0.5, '#A5d9ec'); // Medium light blue
+        gradient.addColorStop(1, '#b13ee8'); // Slightly darker blue
         
         // Fill the background
         this.ctx.fillStyle = gradient;
@@ -592,41 +592,91 @@ class BallsInBoxesGame {
         document.getElementById('turn').textContent = `Turn: ${this.turn}`;
     }
     
-    drawGravityVector() {
-        // Comment out gravity vector for cleaner UI
-        /*
-        const centerX = this.width / 2;
-        const centerY = 50;
-        const scale = 50;
-        
-        // Clear previous vector
+    drawCenterGravityArrow() {
         this.ctx.save();
-        this.ctx.strokeStyle = '#FF0000';
-        this.ctx.lineWidth = 3;
-        this.ctx.fillStyle = '#FF0000';
         
-        // Draw gravity vector
-        const gravityX = this.engine.world.gravity.x * scale;
-        const gravityY = this.engine.world.gravity.y * scale;
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        const arrowLength = 100;
+        const arrowHeadSize = 40;
+        const shaftWidth = 20;
+        const lineWidth = 3;
         
-        // Arrow line
+        // Calculate arrow direction
+        const dirX = Math.cos(this.gravityAngle);
+        const dirY = Math.sin(this.gravityAngle);
+        
+        // Calculate perpendicular direction for shaft width
+        const perpX = -dirY;
+        const perpY = dirX;
+        
+        // Calculate shaft end position
+        const shaftEndX = centerX + dirX * (arrowLength - arrowHeadSize);
+        const shaftEndY = centerY + dirY * (arrowLength - arrowHeadSize);
+        
+        // Calculate arrow tip
+        const tipX = centerX + dirX * arrowLength;
+        const tipY = centerY + dirY * arrowLength;
+        
+        // Set up drawing style - outline only with transparent fill
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+        this.ctx.fillStyle = 'transparent';
+        this.ctx.lineWidth = lineWidth;
+        this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
+        
+        // Create fat arrow path
         this.ctx.beginPath();
-        this.ctx.moveTo(centerX, centerY);
-        this.ctx.lineTo(centerX + gravityX, centerY + gravityY);
+        
+        // Start at back left of shaft
+        this.ctx.moveTo(
+            centerX + perpX * shaftWidth / 2,
+            centerY + perpY * shaftWidth / 2
+        );
+        
+        // Go to front left of shaft
+        this.ctx.lineTo(
+            shaftEndX + perpX * shaftWidth / 2,
+            shaftEndY + perpY * shaftWidth / 2
+        );
+        
+        // Go to left side of arrow head
+        this.ctx.lineTo(
+            shaftEndX + perpX * arrowHeadSize / 2,
+            shaftEndY + perpY * arrowHeadSize / 2
+        );
+        
+        // Go to arrow tip
+        this.ctx.lineTo(tipX, tipY);
+        
+        // Go to right side of arrow head
+        this.ctx.lineTo(
+            shaftEndX - perpX * arrowHeadSize / 2,
+            shaftEndY - perpY * arrowHeadSize / 2
+        );
+        
+        // Go to front right of shaft
+        this.ctx.lineTo(
+            shaftEndX - perpX * shaftWidth / 2,
+            shaftEndY - perpY * shaftWidth / 2
+        );
+        
+        // Go to back right of shaft
+        this.ctx.lineTo(
+            centerX - perpX * shaftWidth / 2,
+            centerY - perpY * shaftWidth / 2
+        );
+        
+        // Close the path
+        this.ctx.closePath();
+        
+        // Draw outline only
         this.ctx.stroke();
         
-        // Arrow head
-        const angle = Math.atan2(gravityY, gravityX);
-        const headLen = 10;
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX + gravityX, centerY + gravityY);
-        this.ctx.lineTo(centerX + gravityX - headLen * Math.cos(angle - Math.PI / 6), 
-                        centerY + gravityY - headLen * Math.sin(angle - Math.PI / 6));
-        this.ctx.moveTo(centerX + gravityX, centerY + gravityY);
-        this.ctx.lineTo(centerX + gravityX - headLen * Math.cos(angle + Math.PI / 6), 
-                        centerY + gravityY - headLen * Math.sin(angle + Math.PI / 6));
-        this.ctx.stroke();
-        */
+        this.ctx.restore();
+    }
+    
+    drawGravityVector() {
         
         this.ctx.save();
         
@@ -689,6 +739,9 @@ class BallsInBoxesGame {
         
         // Draw gradient background following gravity direction
         this.drawGravityBackground();
+        
+        // Draw center gravity arrow in background
+        // this.drawCenterGravityArrow();
         
         // Draw walls
         this.ctx.fillStyle = '#333';
@@ -790,7 +843,7 @@ class BallsInBoxesGame {
         });
         
         // Draw gravity vector and UI
-        this.drawGravityVector();
+       this.drawGravityVector();
     }
     
     nextTurn() {
