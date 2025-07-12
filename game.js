@@ -2,6 +2,7 @@ const Engine = Matter.Engine;
 const World = Matter.World;
 const Bodies = Matter.Bodies;
 const Body = Matter.Body;
+const Composite = Matter.Composite;
 const Render = Matter.Render;
 const Mouse = Matter.Mouse;
 const MouseConstraint = Matter.MouseConstraint;
@@ -23,6 +24,8 @@ class BallsInBoxesGame {
         this.boxes = [];
         this.levelColors = [];
         this.walls = [];
+        
+        this.ballsFixed = false; // false = boxes fixed, balls move; true = balls fixed, boxes move
         
         this.gravityAngle = Math.PI / 2; // Start pointing down
         this.baseGravityStrength = 1;
@@ -101,34 +104,60 @@ class BallsInBoxesGame {
         // Create walls based on which side is open
         if (openSide !== 2) { // Bottom wall (unless bottom is open)
             walls.push(Bodies.rectangle(x, y + boxSize / 2 - thickness / 2, boxSize, thickness, {
-                isStatic: true,
                 render: { fillStyle: '#666' }
             }));
         }
         
         if (openSide !== 0) { // Top wall (unless top is open)
             walls.push(Bodies.rectangle(x, y - boxSize / 2 + thickness / 2, boxSize, thickness, {
-                isStatic: true,
                 render: { fillStyle: '#666' }
             }));
         }
         
         if (openSide !== 3) { // Left wall (unless left is open)
             walls.push(Bodies.rectangle(x - boxSize / 2 + thickness / 2, y, thickness, boxSize, {
-                isStatic: true,
                 render: { fillStyle: '#666' }
             }));
         }
         
         if (openSide !== 1) { // Right wall (unless right is open)
             walls.push(Bodies.rectangle(x + boxSize / 2 - thickness / 2, y, thickness, boxSize, {
-                isStatic: true,
                 render: { fillStyle: '#666' }
             }));
         }
         
+        // Create a compound body from the walls
+        const compoundBox = Body.create({
+            parts: walls,
+            isStatic: !this.ballsFixed,
+            restitution: 0.4,
+            friction: 0.5,
+            frictionAir: 0.005,
+            frictionStatic: 0.8,
+            render: { visible: false } // Hide the compound body's own render shape
+        });
+        
+        // Store original wall specifications for rendering
+        const wallSpecs = [];
+        
+        // Calculate wall specifications for rendering
+        if (openSide !== 2) { // Bottom wall
+            wallSpecs.push({ x: 0, y: boxSize / 2 - thickness / 2, width: boxSize, height: thickness });
+        }
+        if (openSide !== 0) { // Top wall
+            wallSpecs.push({ x: 0, y: -boxSize / 2 + thickness / 2, width: boxSize, height: thickness });
+        }
+        if (openSide !== 3) { // Left wall
+            wallSpecs.push({ x: -boxSize / 2 + thickness / 2, y: 0, width: thickness, height: boxSize });
+        }
+        if (openSide !== 1) { // Right wall
+            wallSpecs.push({ x: boxSize / 2 - thickness / 2, y: 0, width: thickness, height: boxSize });
+        }
+
         const box = {
-            bodies: walls,
+            compoundBody: compoundBox,
+            bodies: walls, // Keep reference for rendering
+            wallSpecs: wallSpecs, // Store original wall positions for rendering
             color: color,
             x: x,
             y: y,
@@ -144,28 +173,37 @@ class BallsInBoxesGame {
             isClosed: false, // Box has an opening
             topWall: null,
             containsBall: false,
-            ballColor: null
+            ballColor: null,
+            isDynamic: false
         };
         
-        World.add(this.world, walls);
+        World.add(this.world, compoundBox);
         return box;
     }
     
     closeBox(box) {
         if (box.isClosed) return;
         
-        // Remove all wall bodies from the world
-        World.remove(this.world, box.bodies);
+        // Remove the compound body from the world
+        World.remove(this.world, box.compoundBody);
+        
+        // Get the current position and angle from the compound body
+        const currentX = box.compoundBody.position.x;
+        const currentY = box.compoundBody.position.y;
+        const currentAngle = box.compoundBody.angle;
         
         // Create a simple solid square body with the ball's color
-        const solidSquare = Bodies.rectangle(box.x, box.y, box.width, box.height, {
-            isStatic: false,
+        const solidSquare = Bodies.rectangle(currentX, currentY, box.width, box.height, {
+            isStatic: !this.ballsFixed,
             restitution: 0.4,
             friction: 0.5,
             frictionAir: 0.005,
             frictionStatic: 0.8,
             render: { fillStyle: box.ballColor }
         });
+        
+        // Set the angle to match the compound body's angle
+        Body.setAngle(solidSquare, currentAngle);
         
         // Add some random initial angular velocity for rotation
         const randomAngularVelocity = (Math.random() - 0.5) * 0.3;
@@ -180,6 +218,7 @@ class BallsInBoxesGame {
         box.solidSquare = solidSquare;
         box.isClosed = true;
         box.isDynamic = true;
+        box.compoundBody = null; // Clear the compound body reference
         
         // Add the solid square to the world
         World.add(this.world, solidSquare);
@@ -187,6 +226,7 @@ class BallsInBoxesGame {
     
     createBall(x, y, color, radius = 15) {
         const ball = Bodies.circle(x, y, radius, {
+            isStatic: this.ballsFixed,
             restitution: 0.6,
             friction: 0.3,
             render: { fillStyle: color }
@@ -375,15 +415,12 @@ class BallsInBoxesGame {
     
     clearGame() {
         this.boxes.forEach(box => {
-            if (box.isDynamic && box.compoundBody) {
-                // Remove compound body for dynamic boxes
+            if (box.compoundBody) {
+                // Remove compound body for open boxes
                 World.remove(this.world, box.compoundBody);
-            } else if (box.isDynamic && box.solidSquare) { 
+            } else if (box.solidSquare) {
+                // Remove solid square for closed boxes
                 World.remove(this.world, box.solidSquare);
-
-            } else {
-                // Remove individual bodies for static boxes
-                World.remove(this.world, box.bodies);
             }
         });
         
@@ -546,12 +583,30 @@ class BallsInBoxesGame {
                     const ballY = ball.position.y;
                     const ballRadius = ball.circleRadius;
                     
+                    // Get current box bounds (either from original position or compound body position)
+                    let boxCenterX, boxCenterY;
+                    if (box.compoundBody) {
+                        boxCenterX = box.compoundBody.position.x;
+                        boxCenterY = box.compoundBody.position.y;
+                    } else {
+                        boxCenterX = box.x;
+                        boxCenterY = box.y;
+                    }
+                    
+                    // Calculate current box bounds
+                    const currentBounds = {
+                        minX: boxCenterX - box.width / 2,
+                        maxX: boxCenterX + box.width / 2,
+                        minY: boxCenterY - box.height / 2,
+                        maxY: boxCenterY + box.height / 2
+                    };
+                    
                     // Check if ball is fully inside the open box (with radius consideration)
                     const margin = ballRadius + 5; // Extra margin to ensure ball is well inside
-                    const isFullyInside = ballX >= box.bounds.minX + margin && 
-                                         ballX <= box.bounds.maxX - margin &&
-                                         ballY >= box.bounds.minY + margin && 
-                                         ballY <= box.bounds.maxY - margin;
+                    const isFullyInside = ballX >= currentBounds.minX + margin && 
+                                         ballX <= currentBounds.maxX - margin &&
+                                         ballY >= currentBounds.minY + margin && 
+                                         ballY <= currentBounds.maxY - margin;
                     
                     if (isFullyInside) {
                         ball.isInCorrectBox = true;
@@ -786,51 +841,104 @@ class BallsInBoxesGame {
                 // Draw gray box walls with colored corners for empty boxes
                 this.ctx.fillStyle = '#666';
                 
-                // Draw individual wall bodies for static boxes
-                box.bodies.forEach(body => {
-                    const x = body.position.x - (body.bounds.max.x - body.bounds.min.x) / 2;
-                    const y = body.position.y - (body.bounds.max.y - body.bounds.min.y) / 2;
-                    const width = body.bounds.max.x - body.bounds.min.x;
-                    const height = body.bounds.max.y - body.bounds.min.y;
+                // Draw individual wall bodies for boxes
+                if (box.compoundBody && box.wallSpecs) {
+                    // For compound bodies, use stored wall specifications for consistent rendering
+                    this.ctx.save();
                     
-                    this.ctx.fillRect(x, y, width, height);
-                });
+                    const compoundX = box.compoundBody.position.x;
+                    const compoundY = box.compoundBody.position.y;
+                    const compoundAngle = box.compoundBody.angle;
+                    
+                    // Transform to the compound body's coordinate system
+                    this.ctx.translate(compoundX, compoundY);
+                    this.ctx.rotate(compoundAngle);
+                    
+                    // Draw each wall using the stored specifications
+                    box.wallSpecs.forEach(wallSpec => {
+                        this.ctx.fillRect(
+                            wallSpec.x - wallSpec.width / 2,
+                            wallSpec.y - wallSpec.height / 2,
+                            wallSpec.width,
+                            wallSpec.height
+                        );
+                    });
+                    
+                    this.ctx.restore();
+                } else {
+                    // Fallback for non-compound bodies
+                    box.bodies.forEach(body => {
+                        this.ctx.save();
+                        
+                        const bodyX = body.position.x;
+                        const bodyY = body.position.y;
+                        const bodyAngle = body.angle;
+                        
+                        const width = body.bounds.max.x - body.bounds.min.x;
+                        const height = body.bounds.max.y - body.bounds.min.y;
+                        
+                        this.ctx.translate(bodyX, bodyY);
+                        this.ctx.rotate(bodyAngle);
+                        this.ctx.fillRect(-width / 2, -height / 2, width, height);
+                        
+                        this.ctx.restore();
+                    });
+                }
                 
                 // Draw colored corner indicators for empty boxes
                 const cornerSize = 12;
                 this.ctx.fillStyle = box.color;
                 
+                // Get box center position from compound body if available
+                let boxCenterX, boxCenterY;
+                if (box.compoundBody) {
+                    boxCenterX = box.compoundBody.position.x;
+                    boxCenterY = box.compoundBody.position.y;
+                } else {
+                    boxCenterX = box.x;
+                    boxCenterY = box.y;
+                }
+                
+                // Draw corners relative to the box center
+                this.ctx.save();
+                this.ctx.translate(boxCenterX, boxCenterY);
+                if (box.compoundBody) {
+                    this.ctx.rotate(box.compoundBody.angle);
+                }
+                
                 // Top-left corner
                 this.ctx.fillRect(
-                    box.x - box.width / 2, 
-                    box.y - box.height / 2, 
+                    -box.width / 2, 
+                    -box.height / 2, 
                     cornerSize, 
                     cornerSize
                 );
                 
                 // Top-right corner
                 this.ctx.fillRect(
-                    box.x + box.width / 2 - cornerSize, 
-                    box.y - box.height / 2, 
+                    box.width / 2 - cornerSize, 
+                    -box.height / 2, 
                     cornerSize, 
                     cornerSize
                 );
                 
                 // Bottom-left corner
                 this.ctx.fillRect(
-                    box.x - box.width / 2, 
-                    box.y + box.height / 2 - cornerSize, 
+                    -box.width / 2, 
+                    box.height / 2 - cornerSize, 
                     cornerSize, 
                     cornerSize
                 );
                 
                 // Bottom-right corner
                 this.ctx.fillRect(
-                    box.x + box.width / 2 - cornerSize, 
-                    box.y + box.height / 2 - cornerSize, 
+                    box.width / 2 - cornerSize, 
+                    box.height / 2 - cornerSize, 
                     cornerSize, 
                     cornerSize
                 );
+                
+                this.ctx.restore();
             }
         });
         
@@ -851,6 +959,29 @@ class BallsInBoxesGame {
         this.level++;
         this.newTurn();
     }
+    
+    toggleFixedObjects() {
+        this.ballsFixed = !this.ballsFixed;
+        
+        // Update button text
+        const button = document.getElementById('switchButton');
+        button.textContent = this.ballsFixed ? 'Switch: Balls Fixed' : 'Switch: Boxes Fixed';
+        
+        // Apply the physics changes to existing objects
+        this.balls.forEach(ball => {
+            Body.setStatic(ball, this.ballsFixed);
+        });
+        
+        this.boxes.forEach(box => {
+            if (!box.isClosed && box.compoundBody) {
+                // For open boxes, change the static state of the compound body
+                Body.setStatic(box.compoundBody, !this.ballsFixed);
+            } else if (box.solidSquare) {
+                // For closed boxes, change the static state of the solid square
+                Body.setStatic(box.solidSquare, !this.ballsFixed);
+            }
+        });
+    }
 }
 
 let game;
@@ -861,6 +992,10 @@ window.addEventListener('load', () => {
 
 function nextTurn() {
     game.nextTurn();
+}
+
+function toggleFixedObjects() {
+    game.toggleFixedObjects();
 }
 
 // Instructions removed for cleaner UI
