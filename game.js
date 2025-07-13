@@ -40,6 +40,10 @@ class BallsInBoxesGame {
         this.lastTapTime = 0;
         this.doubleTapDelay = 300; // milliseconds
         
+        // Double-click detection (separate from touch)
+        this.lastClickTime = 0;
+        this.doubleClickDelay = 300; // milliseconds
+        
         this.init();
     }
     
@@ -457,7 +461,7 @@ class BallsInBoxesGame {
         
         // Mouse events for desktop testing
         this.canvas.addEventListener('mousedown', (event) => {
-            this.handleTouchStart(event);
+            this.handleMouseStart(event);
         });
         
         this.canvas.addEventListener('mousemove', (event) => {
@@ -486,6 +490,32 @@ class BallsInBoxesGame {
                     break;
             }
         });
+    }
+    
+    handleMouseStart(event) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        
+        // Check for double-click
+        const currentTime = Date.now();
+        const timeSinceLastClick = currentTime - this.lastClickTime;
+        
+        if (timeSinceLastClick < this.doubleClickDelay) {
+            // Double-click detected - toggle fixed objects
+            this.toggleFixedObjects();
+            this.lastClickTime = 0; // Reset to prevent triple-click
+            return; // Don't start dragging on double-click
+        }
+        
+        this.lastClickTime = currentTime;
+        
+        // Allow dragging anywhere on screen
+        this.isDragging = true;
+        this.dragStartX = x;
+        this.dragStartY = y;
+        this.dragCurrentX = x;
+        this.dragCurrentY = y;
     }
     
     handleTouchStart(event) {
