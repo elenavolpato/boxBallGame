@@ -227,7 +227,7 @@ class BallsInBoxesGame {
         
         // Create a simple solid square body with the ball's color
         const solidSquare = Bodies.rectangle(currentX, currentY, box.width, box.height, {
-            isStatic: !this.ballsFixed,
+            isStatic: this.ballsFixed,
             restitution: 0.4,
             friction: 0.5,
             frictionAir: 0.005,
@@ -319,6 +319,18 @@ class BallsInBoxesGame {
             g: parseInt(result[2], 16),
             b: parseInt(result[3], 16)
         } : null;
+    }
+    
+    // Darken a color by a given factor (0-1)
+    darkenColor(hexColor, factor) {
+        const rgb = this.hexToRgb(hexColor);
+        if (!rgb) return hexColor;
+        
+        const r = Math.floor(rgb.r * (1 - factor));
+        const g = Math.floor(rgb.g * (1 - factor));
+        const b = Math.floor(rgb.b * (1 - factor));
+        
+        return `rgb(${r}, ${g}, ${b})`;
     }
     
     // Generate N distinct random colors
@@ -885,6 +897,8 @@ class BallsInBoxesGame {
             if (box.containsBall) {
                 // Draw the solid square for closed boxes
                 this.ctx.fillStyle = box.ballColor;
+                this.ctx.strokeStyle = this.darkenColor(box.ballColor, 0.3);
+                this.ctx.lineWidth = 2;
                 
                 if (box.solidSquare) {
                     // For dynamic solid squares, draw rotated filled square
@@ -895,13 +909,20 @@ class BallsInBoxesGame {
                     this.ctx.translate(bodyPos.x, bodyPos.y);
                     this.ctx.rotate(bodyAngle);
                     
-                    // Draw filled square
+                    // Draw filled square with border
                     this.ctx.fillRect(-box.width / 2, -box.height / 2, box.width, box.height);
+                    this.ctx.strokeRect(-box.width / 2, -box.height / 2, box.width, box.height);
                     
                     this.ctx.restore();
                 } else {
                     // Fallback for static boxes (shouldn't happen)
                     this.ctx.fillRect(
+                        box.x - box.width / 2, 
+                        box.y - box.height / 2, 
+                        box.width, 
+                        box.height
+                    );
+                    this.ctx.strokeRect(
                         box.x - box.width / 2, 
                         box.y - box.height / 2, 
                         box.width, 
@@ -1016,9 +1037,12 @@ class BallsInBoxesGame {
         // Draw balls
         this.balls.forEach(ball => {
             this.ctx.fillStyle = ball.ballColor;
+            this.ctx.strokeStyle = this.darkenColor(ball.ballColor, 0.3);
+            this.ctx.lineWidth = 2;
             this.ctx.beginPath();
             this.ctx.arc(ball.position.x, ball.position.y, ball.circleRadius, 0, 2 * Math.PI);
             this.ctx.fill();
+            this.ctx.stroke();
         });
         
         // Draw gravity vector and UI
@@ -1045,7 +1069,7 @@ class BallsInBoxesGame {
                 Body.setStatic(box.compoundBody, !this.ballsFixed);
             } else if (box.solidSquare) {
                 // For closed boxes, change the static state of the solid square
-                Body.setStatic(box.solidSquare, !this.ballsFixed);
+                Body.setStatic(box.solidSquare, this.ballsFixed);
             }
         });
     }
