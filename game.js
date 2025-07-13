@@ -36,6 +36,10 @@ class BallsInBoxesGame {
         this.dragCurrentX = 0;
         this.dragCurrentY = 0;
         
+        // Double-tap detection
+        this.lastTapTime = 0;
+        this.doubleTapDelay = 300; // milliseconds
+        
         this.init();
     }
     
@@ -495,6 +499,19 @@ class BallsInBoxesGame {
             x = event.clientX - rect.left;
             y = event.clientY - rect.top;
         }
+        
+        // Check for double-tap
+        const currentTime = Date.now();
+        const timeSinceLastTap = currentTime - this.lastTapTime;
+        
+        if (timeSinceLastTap < this.doubleTapDelay) {
+            // Double-tap detected - toggle fixed objects
+            this.toggleFixedObjects();
+            this.lastTapTime = 0; // Reset to prevent triple-tap
+            return; // Don't start dragging on double-tap
+        }
+        
+        this.lastTapTime = currentTime;
         
         // Allow dragging anywhere on screen
         this.isDragging = true;
@@ -963,10 +980,6 @@ class BallsInBoxesGame {
     toggleFixedObjects() {
         this.ballsFixed = !this.ballsFixed;
         
-        // Update button text
-        const button = document.getElementById('switchButton');
-        button.textContent = this.ballsFixed ? 'Switch: Balls Fixed' : 'Switch: Boxes Fixed';
-        
         // Apply the physics changes to existing objects
         this.balls.forEach(ball => {
             Body.setStatic(ball, this.ballsFixed);
@@ -992,10 +1005,6 @@ window.addEventListener('load', () => {
 
 function nextTurn() {
     game.nextTurn();
-}
-
-function toggleFixedObjects() {
-    game.toggleFixedObjects();
 }
 
 // Instructions removed for cleaner UI
