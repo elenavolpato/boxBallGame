@@ -44,6 +44,11 @@ class BallsInBoxesGame {
         this.lastClickTime = 0;
         this.doubleClickDelay = 300; // milliseconds
         
+        // Gradient colors
+        this.gradientColor1 = '#99c1f1';
+        this.gradientColor2 = '#62a0ea';
+        this.gradientColor3 = '#1a5fb4';
+        
         this.init();
     }
     
@@ -55,6 +60,7 @@ class BallsInBoxesGame {
         this.createWalls();
         console.log('Walls created:', this.walls.length);
         this.setupTouchControls();
+        this.setupColorControls();
         this.gameLoop();
         this.newTurn();
     }
@@ -99,6 +105,25 @@ class BallsInBoxesGame {
         ];
         
         World.add(this.world, this.walls);
+    }
+    
+    setupColorControls() {
+        // Add event listeners for color selectors
+        const color1Input = document.getElementById('color1');
+        const color2Input = document.getElementById('color2');
+        const color3Input = document.getElementById('color3');
+        
+        color1Input.addEventListener('input', (event) => {
+            this.gradientColor1 = event.target.value;
+        });
+        
+        color2Input.addEventListener('input', (event) => {
+            this.gradientColor2 = event.target.value;
+        });
+        
+        color3Input.addEventListener('input', (event) => {
+            this.gradientColor3 = event.target.value;
+        });
     }
     
     createSquareBox(x, y, color, boxSize = 70) {
@@ -397,10 +422,10 @@ class BallsInBoxesGame {
         // Create linear gradient
         const gradient = this.ctx.createLinearGradient(startX, startY, endX, endY);
         
-        // Darker but still light colors for the gradient
-        gradient.addColorStop(0, '#df110044'); // Darker light blue
-        gradient.addColorStop(0.5, '#A5d9ec'); // Medium light blue
-        gradient.addColorStop(1, '#b13ee8'); // Slightly darker blue
+        // Use the debug gradient colors
+        gradient.addColorStop(0, this.gradientColor1);
+        gradient.addColorStop(0.5, this.gradientColor2);
+        gradient.addColorStop(1, this.gradientColor3);
         
         // Fill the background
         this.ctx.fillStyle = gradient;
@@ -689,9 +714,8 @@ class BallsInBoxesGame {
     }
     
     updateUI() {
-        document.getElementById('score').textContent = `Score: ${this.score}`;
-        document.getElementById('level').textContent = `Level: ${this.level}`;
-        document.getElementById('turn').textContent = `Turn: ${this.turn}`;
+        // UI elements removed - this function is kept for compatibility
+        // but no longer updates any elements
     }
     
     drawCenterGravityArrow() {

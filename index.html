@@ -81,15 +81,57 @@
         button:hover {
             background: #45a049;
         }
+        
+        /* Debug color controls - To enable: change 'none' to 'block' */
+        #colorDebugPanel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 30;
+            font-size: 12px;
+            display: none; /* Hidden - change to 'block' to enable color debugging */
+        }
+        
+        .color-control {
+            margin-bottom: 8px;
+        }
+        
+        .color-control label {
+            display: block;
+            margin-bottom: 2px;
+            font-weight: bold;
+        }
+        
+        .color-control input[type="color"] {
+            width: 50px;
+            height: 30px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <div id="gameUI">
-            <div>
-                <div id="score">Score: 0</div>
-                <div id="level">Level: 1</div>
-                <div id="turn">Turn: 1</div>
+        </div>
+        
+        <!-- Debug color controls -->
+        <div id="colorDebugPanel">
+            <div class="color-control">
+                <label for="color1">Start Color:</label>
+                <input type="color" id="color1" value="#99c1f1">
+            </div>
+            <div class="color-control">
+                <label for="color2">Mid Color:</label>
+                <input type="color" id="color2" value="#62a0ea">
+            </div>
+            <div class="color-control">
+                <label for="color3">End Color:</label>
+                <input type="color" id="color3" value="#1a5fb4">
             </div>
         </div>
         <canvas id="gameCanvas"></canvas>
