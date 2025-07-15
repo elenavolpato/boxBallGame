@@ -25,6 +25,29 @@ class BallsInBoxesGame {
         
         this.ballsFixed = false; // false = boxes fixed, balls move; true = balls fixed, boxes move
         
+        // Color to number mapping: each color always gets the same number
+        this.colorToNumber = {
+            '#ff4444': 1,  // Red
+            '#44ff44': 2,  // Green  
+            '#4444ff': 4,  // Blue
+            '#ffff44': 8,  // Yellow
+            '#ff44ff': 16  // Purple
+        };
+        
+        // Reverse mapping: number to color
+        this.numberToColor = {
+            1: '#ff4444',   // Red
+            2: '#44ff44',   // Green
+            4: '#4444ff',   // Blue  
+            8: '#ffff44',   // Yellow
+            16: '#ff44ff',  // Purple
+            32: '#ff8844',  // Orange (for higher merges)
+            64: '#44ffff',  // Cyan
+            128: '#ff4488', // Pink
+            256: '#88ff44', // Light Green
+            512: '#8844ff'  // Light Purple
+        };
+        
         this.gravityAngle = Math.PI / 2; // Start pointing down
         this.baseGravityStrength = 1;
         this.gravityStrength = 1;
@@ -92,8 +115,8 @@ class BallsInBoxesGame {
                 const boxA = this.boxes.find(box => box.solidSquare === bodyA);
                 const boxB = this.boxes.find(box => box.solidSquare === bodyB);
                 
-                if (boxA && boxB && boxA.ballColor === boxB.ballColor) {
-                    // Same color collision detected
+                if (boxA && boxB && boxA.ballColor === boxB.ballColor && boxA.squareNumber === boxB.squareNumber) {
+                    // Same color and number collision detected
                     this.handleSquareCollision(boxA, boxB);
                 }
             });
@@ -225,7 +248,8 @@ class BallsInBoxesGame {
             topWall: null,
             containsBall: false,
             ballColor: null,
-            isDynamic: false
+            isDynamic: false,
+            squareNumber: null
         };
         
         World.add(this.world, compoundBox);
@@ -264,6 +288,9 @@ class BallsInBoxesGame {
         const randomVelocityX = (Math.random() - 0.5) * 2;
         const randomVelocityY = Math.random() * -1; // Slight upward velocity
         Body.setVelocity(solidSquare, { x: randomVelocityX, y: randomVelocityY });
+        
+        // Assign number based on the ball's color
+        box.squareNumber = this.colorToNumber[box.ballColor] || 1;
         
         // Store the solid square body and mark as closed
         box.solidSquare = solidSquare;
@@ -739,8 +766,18 @@ class BallsInBoxesGame {
     }
     
     handleSquareCollision(boxA, boxB) {
-        // Award points and remove both squares
-        this.score += 10;
+        // Calculate the new number (sum of the two colliding squares)
+        const newNumber = boxA.squareNumber + boxB.squareNumber;
+        
+        // Get the color that corresponds to the new number
+        const newColor = this.numberToColor[newNumber] || boxA.ballColor;
+        
+        // Calculate collision point (midpoint between the two squares)
+        const collisionX = (boxA.solidSquare.position.x + boxB.solidSquare.position.x) / 2;
+        const collisionY = (boxA.solidSquare.position.y + boxB.solidSquare.position.y) / 2;
+        
+        // Award points based on the new number
+        this.score += newNumber;
         
         // Remove both squares from the world
         World.remove(this.world, boxA.solidSquare);
@@ -752,13 +789,64 @@ class BallsInBoxesGame {
         boxA.solidSquare = null;
         boxB.solidSquare = null;
         
-        // Remove boxes from array (use filter to avoid index issues)
+        // Remove boxes from array
         this.boxes = this.boxes.filter(box => box !== boxA && box !== boxB);
         
-        // Spawn new matching pair (box and ball with same color)
-        this.spawnMatchingPair();
+        // Create new merged square with the color corresponding to the new number
+        this.createMergedSquare(collisionX, collisionY, newColor, newNumber);
         
-        console.log('Square collision! Score:', this.score);
+        // Don't spawn new matching pairs for merges - let the merged square persist
+        
+        console.log(`Square collision! ${boxA.squareNumber} + ${boxB.squareNumber} = ${newNumber}, New color: ${newColor}, Score: ${this.score}`);
+    }
+    
+    createMergedSquare(x, y, color, number) {
+        // Create a solid square body directly (no box structure needed)
+        const solidSquare = Bodies.rectangle(x, y, 70, 70, {
+            isStatic: this.ballsFixed,
+            restitution: 0.4,
+            friction: 0.5,
+            frictionAir: 0.005,
+            frictionStatic: 0.8,
+            render: { fillStyle: color }
+        });
+        
+        // Add some random initial angular velocity for rotation
+        const randomAngularVelocity = (Math.random() - 0.5) * 0.3;
+        Body.setAngularVelocity(solidSquare, randomAngularVelocity);
+        
+        // Create a box object to track this merged square
+        const mergedBox = {
+            compoundBody: null,
+            bodies: [],
+            wallSpecs: [],
+            color: color,
+            x: x,
+            y: y,
+            width: 70,
+            height: 70,
+            openSide: null,
+            bounds: {
+                minX: x - 35,
+                maxX: x + 35,
+                minY: y - 35,
+                maxY: y + 35
+            },
+            isClosed: true,
+            topWall: null,
+            containsBall: true,
+            ballColor: color,
+            isDynamic: true,
+            squareNumber: number,
+            solidSquare: solidSquare,
+            destroyed: false
+        };
+        
+        // Add to world and boxes array
+        World.add(this.world, solidSquare);
+        this.boxes.push(mergedBox);
+        
+        return mergedBox;
     }
     
     spawnBox(color = null) {
@@ -998,6 +1086,15 @@ class BallsInBoxesGame {
                 // Draw filled square with border
                 this.ctx.fillRect(-box.width / 2, -box.height / 2, box.width, box.height);
                 this.ctx.strokeRect(-box.width / 2, -box.height / 2, box.width, box.height);
+                
+                // Draw the number on the square
+                if (box.squareNumber !== null) {
+                    this.ctx.fillStyle = '#000000';
+                    this.ctx.font = 'bold 24px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(box.squareNumber.toString(), 0, 0);
+                }
                 
                 this.ctx.restore();
             } else if (!box.containsBall) {
